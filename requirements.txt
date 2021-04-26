@@ -1,0 +1,19 @@
+jupyterlab==3.0.9
+matplotlib==3.3.4
+pandas==1.1.5
+pytest==6.2.2
+seaborn==0.11.1
+glob2==0.7
+statsmodels==0.12.2
+tabulate==0.8.9
+<<<<<<< HEAD
+<<<<<<< HEAD
+plotly==4.14.3
+graphviz
+=======
+plotly==4.14.3
+>>>>>>> 5f47bc6 (consertado git)
+=======
+plotly==4.14.3
+graphviz
+>>>>>>> 20db8a9 (fix: requirements, dockerfile)
