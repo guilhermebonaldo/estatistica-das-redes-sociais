@@ -11,6 +11,8 @@ class ModeloVotante:
     def __init__(self, 
                 n_actors:int, 
                 influence_mode:str,
+                connection_probability:float = None,
+                k:int = None,
                 possible_opinions:List[int] = None, 
                 opinions_probabilities:List[float] = None, 
                 initial_opinions_list = None, # not necessary if possible_opinions and opinions_probabilities
@@ -27,14 +29,26 @@ class ModeloVotante:
         ----------
         n_actors:int
             nuber of actors in the network
+            
         influence_mode:str
             how influences are assigned
-            possible inputs: ['circular_neighbors', 'all', 'linear_neighbors']
+            possible inputs: ['circular_neighbors', 'all', 'linear_neighbors',
+                                'erdos_renyi', 'watts_strogatz']
+            
+        connection_probability:float
+            for 'erdos_renyi', the probability that edges will be assigned 
+            for 'watts_strogatz', the probability that points will be disassigned
+            
+        k:int
+            for 'watts_strogatz', the number of neighbours to be assigned
+            
         possible_opinions:List[int]
             list of possible opinions
             e.g.: [-1,1]
+            
         opinions_probabilities:List[float]
             probabilities of opinions setted in possible_opinions
+            
         initial_opinions_list: List[int]
             [optional]
             custom list of opinions
@@ -66,11 +80,16 @@ class ModeloVotante:
         if bots_positions:
             assert bots_opinion, \
                     'When bots exists its needed to specify an opinion'
+                    
+        if influence_mode in ['erdos_renyi', 'watts_strogatz']:
+            assert connection_probability, \
+                    'influence mode needs connection probability parameter'
 
-
+        self.k = k
         self.actors_influencers = self.make_actors_influencers(
                                         n_actors = n_actors, 
                                         influence_mode = influence_mode,
+                                        connection_probability = connection_probability,
                                         bots_positions = bots_positions
                                     )
                                     
@@ -96,6 +115,8 @@ class ModeloVotante:
         self.randomize_start_opinions = randomize_start_opinions
         self.bots_positions = bots_positions
         self.bots_opinion = bots_opinion
+        
+        
 
         return 
 
@@ -103,10 +124,12 @@ class ModeloVotante:
     def make_actors_influencers(self, 
                                 n_actors, 
                                 influence_mode,
+                                connection_probability,
                                 bots_positions = None,
                                 ):
 
-        valid_influence_modes = ['circular_neighbors', 'all', 'linear_neighbors']
+        valid_influence_modes = ['circular_neighbors', 'all', 'linear_neighbors',
+                                 'erdos_renyi', 'watts_strogatz']
         if influence_mode not in valid_influence_modes:
             raise ValueError("influence_mode must be one of %r." % valid_influence_modes)
 
@@ -154,6 +177,47 @@ class ModeloVotante:
             actors = range(1,last_actor+1)
             actors_influencers = {f'actor_{n}':{'is_bot':False,'influencers':[f'actor_{i}' for i in actors if i != n]} for n in actors}
 
+        elif influence_mode == 'erdos_renyi':
+            
+            actors_influencers = {f'actor_{n}':{'is_bot':False,'influencers':[]} for n in range(1,last_actor+1)}
+            
+            for v in range(1,last_actor+1):                
+                for v_ in range(v+1, last_actor+1):
+                    
+                    if random.uniform(0, 1) <=  connection_probability:
+                        actors_influencers[f'actor_{v}']['influencers'].append(f'actor_{v_}')
+                        actors_influencers[f'actor_{v_}']['influencers'].append(f'actor_{v}')
+
+        elif influence_mode == 'watts_strogatz':
+            
+            
+            
+            actors_list = [f'actor_{n}' for n in range(1,last_actor+1)]
+            
+            # make df of influences
+            infl = np.array([np.roll(np.array(actors_list), k_) for k_ in range(-2,2+1) if k_ != 0])
+            
+            infl = pd.DataFrame(infl, columns = actors_list)
+            
+            self.infl = infl
+            
+            actors_influencers = {actor:{'is_bot':False,
+                                        'influencers':infl[actor].tolist()
+                                        } 
+                                  for actor in actors_list
+                                  
+                                  }
+            
+            if self.k > 0:
+                for actor in actors_influencers.keys():
+                    for influencer in actors_influencers[actor]['influencers']:
+                        if random.uniform(0, 1) <=  connection_probability:
+                            continue
+                        else: continue
+
+
+
+        
         
         # insert bots
         if bots_positions != None:
@@ -313,3 +377,26 @@ class ModeloVotante:
     def make_graph(self):
         self.graph = plots.plot_actors_and_influencers(self.actors_influencers)
         return self.graph
+    
+    def D(self, v = None):
+        d = (
+            pd.DataFrame(self.actors_influencers)
+            .loc['influencers']
+            .explode()
+            .dropna()
+            .to_frame()
+            .reset_index()
+            .assign(count = 1)
+            .pivot(columns = 'influencers', index = 'index', values = 'count')
+            .fillna(0)
+            .astype(int)
+            .sum()
+            )
+        
+        if v == None:
+            return d
+        
+        else:
+            return d.loc[v]
+        
+        
